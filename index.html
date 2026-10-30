@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>英単語アプリ</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+  input, button { font-size: 1rem; padding: .5rem; margin: .25rem 0; }
+  input { width: 100%; box-sizing: border-box; }
+  li { display: flex; justify-content: space-between; padding: .4rem 0; border-bottom: 1px solid #ddd; }
+  #msg { color: #c00; }
+</style>
+</head>
+<body>
+<h1>英単語アプリ</h1>
+<p id="msg"></p>
+
+<section id="auth">
+  <input id="email" type="email" placeholder="メールアドレス">
+  <input id="password" type="password" placeholder="パスワード(6文字以上)">
+  <button id="login">ログイン</button>
+  <button id="signup">新規登録</button>
+</section>
+
+<section id="app" hidden>
+  <p><span id="who"></span> <button id="logout">ログアウト</button></p>
+  <input id="word" placeholder="英単語">
+  <input id="meaning" placeholder="意味">
+  <button id="add">追加</button>
+  <ul id="list"></ul>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://xftnorrxnxkhgyedreff.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable_cxaIfEoQtmORuPkMQvtzQQ_Z1lLyj3I";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = (id) => document.getElementById(id);
+const say = (t) => { $("msg").textContent = t || ""; };
+
+async function loadWords() {
+  const { data, error } = await db.from("words").select("*").order("created_at", { ascending: false });
+  if (error) return say(error.message);
+  $("list").innerHTML = "";
+  data.forEach((w) => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.textContent = w.word + " : " + w.meaning;
+    const del = document.createElement("button");
+    del.textContent = "削除";
+    del.onclick = async () => { await db.from("words").delete().eq("id", w.id); loadWords(); };
+    li.append(span, del);
+    $("list").append(li);
+  });
+}
+
+function showState(session) {
+  $("auth").hidden = !!session;
+  $("app").hidden = !session;
+  if (session) { $("who").textContent = session.user.email; loadWords(); }
+}
+
+$("signup").onclick = async () => {
+  say("");
+  const { error } = await db.auth.signUp({ email: $("email").value, password: $("password").value });
+  if (error) say(error.message);
+};
+$("login").onclick = async () => {
+  say("");
+  const { error } = await db.auth.signInWithPassword({ email: $("email").value, password: $("password").value });
+  if (error) say(error.message);
+};
+$("logout").onclick = () => db.auth.signOut();
+$("add").onclick = async () => {
+  say("");
+  const { error } = await db.from("words").insert({ word: $("word").value, meaning: $("meaning").value });
+  if (error) return say(error.message);
+  $("word").value = ""; $("meaning").value = "";
+  loadWords();
+};
+
+db.auth.onAuthStateChange((_event, session) => showState(session));
+db.auth.getSession().then(({ data }) => showState(data.session));
+</script>
+</body>
+</html>
